@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>スケジュール管理</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    body { font-family: sans-serif; padding: 15px; background: #f5f5f5; }
+    input, select, button { width: 100%; padding: 10px; margin: 5px 0; font-size: 16px; }
+    .card { background: white; padding: 10px; margin-top: 10px; border-radius: 8px; }
+    .btn { margin-top: 5px; }
+  </style>
+</head>
+<body>
+
+<h2>予定入力</h2>
+
+<input id="title" placeholder="イベントタイトル">
+<input id="datetime" type="datetime-local">
+<select id="type">
+  <option value="通常便">通常便</option>
+  <option value="チャーター">チャーター</option>
+</select>
+
+<button onclick="addEvent()">追加</button>
+
+<h2>スケジュール</h2>
+<div id="schedule"></div>
+
+<script type="module">
+
+const firebaseConfig = {
+  apiKey: "あなたの値",
+  authDomain: "あなたの値",
+  projectId: "あなたの値",
+};
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  getDocs,
+  deleteDoc,
+  doc,
+  updateDoc
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+window.addEvent = addEvent;
+window.deleteEvent = deleteEvent;
+window.editEvent = editEvent;
+
+async function addEvent() {
+  const title = document.getElementById("title").value;
+  const datetime = document.getElementById("datetime").value;
+  const type = document.getElementById("type").value;
+
+  if (!title || !datetime) {
+    alert("入力してください");
+    return;
+  }
+
+  await addDoc(collection(db, "events"), {
+    title,
+    datetime,
+    type
+  });
+
+  loadEvents();
+}
+
+async function deleteEvent(id) {
+  await deleteDoc(doc(db, "events", id));
+  loadEvents();
+}
+
+async function editEvent(id, oldTitle, oldDatetime, oldType) {
+  const title = prompt("タイトル変更", oldTitle);
+  const datetime = prompt("日時変更 (例: 2026-04-26T10:00)", oldDatetime);
+  const type = prompt("種別変更（通常便 or チャーター）", oldType);
+
+  if (!title || !datetime) return;
+
+  await updateDoc(doc(db, "events", id), {
+    title,
+    datetime,
+    type
+  });
+
+  loadEvents();
+}
+
+async function loadEvents() {
+  const querySnapshot = await getDocs(collection(db, "events"));
+
+  let events = [];
+
+  querySnapshot.forEach(docSnap => {
+    events.push({ id: docSnap.id, ...docSnap.data() });
+  });
+
+  render(events);
+}
+
+function render(events) {
+  const grouped = {};
+
+  events.forEach(e => {
+    const date = e.datetime.split("T")[0];
+    if (!grouped[date]) grouped[date] = [];
+    grouped[date].push(e);
+  });
+
+  const container = document.getElementById("schedule");
+  container.innerHTML = "";
+
+  Object.keys(grouped).sort().forEach(date => {
+    const div = document.createElement("div");
+    div.className = "card";
+
+    let html = `<strong>📅 ${date}</strong><br>`;
+
+    grouped[date].forEach(e => {
+      const time = e.datetime.split("T")[1];
+
+      html += `
+        ・${e.title}（${e.type} ${time}）<br>
+        <button class="btn" onclick="editEvent('${e.id}', '${e.title}', '${e.datetime}', '${e.type}')">編集</button>
+        <button class="btn" onclick="deleteEvent('${e.id}')">削除</button>
+        <br>
+      `;
+    });
+
+    div.innerHTML = html;
+    container.appendChild(div);
+  });
+}
+
+loadEvents();
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>スケジュール管理</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    body { font-family: sans-serif; padding: 15px; background: #f5f5f5; }
+    input, select{ width: 100%; padding: 10px; margin: 5px 0; font-size: 16px; }
+    button {
+  font-size: 12px;
+  padding: 5px 8px;
+  margin-left: 5px;
+}
+.form {
+  background: white;
+  padding: 15px;
+  border-radius: 10px;
+  margin-bottom: 15px;
+}
+
+.form-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.form-row input,
+.form-row select {
+  flex: 1;
+}
+
+/* タイトルだけ大きく */
+#title {
+  font-size: 18px;
+  padding: 15px;
+}
+
+/* 追加ボタンをいい感じに */
+.add-btn {
+  width: 100%;
+  padding: 14px;
+  font-size: 16px;
+  background: #4da6ff;
+  color: white;
+  border: none;
+  border-radius: 8px;
+}
+
+    .card { background: white; padding: 10px; margin-top: 10px; border-radius: 8px; }
+    .btn { margin-top: 5px; }
+  </style>
+</head>
+<body>
+
+<h2>予定入力</h2>
+
+<div class="form">
+
+  <div class="form-row">
+    <input id="title" placeholder="イベントタイトル">
+  </div>
+
+  <div class="form-row">
+    <input id="datetime" type="datetime-local">
+    <select id="type">
+      <option value="ムービングチャーター">ムービングチャーター</option>
+      <option value="チャーター">チャーター</option>
+      <option value="通常便">通常便</option>
+      <option value="宅配業者">宅配業者</option>
+    </select>
+  </div>
+
+  <button class="add-btn" onclick="addEvent()">追加</button>
+
+</div>
+
+<h2>スケジュール</h2>
+<div id="schedule"></div>
+
+<script type="module">
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDk6OIV4haOS8oqfwZud7Ag-awealisGq0",
+  authDomain: "schedule-app-60aeb.firebaseapp.com",
+  projectId: "schedule-app-60aeb",
+  storageBucket: "schedule-app-60aeb.firebasestorage.app",
+  messagingSenderId: "830239994512",
+  appId: "1:830239994512:web:8addc482c306083af0de15"
+};
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  getDocs,
+  deleteDoc,
+  doc,
+  updateDoc
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+window.addEvent = addEvent;
+window.deleteEvent = deleteEvent;
+window.editEvent = editEvent;
+
+async function addEvent() {
+  const title = document.getElementById("title").value;
+  const datetime = document.getElementById("datetime").value;
+  const type = document.getElementById("type").value;
+
+  if (!title || !datetime) {
+    alert("入力してください");
+    return;
+  }
+
+  await addDoc(collection(db, "events"), {
+    title,
+    datetime,
+    type
+  });
+
+  loadEvents();
+}
+
+async function deleteEvent(id) {
+  await deleteDoc(doc(db, "events", id));
+  loadEvents();
+}
+
+async function editEvent(id, oldTitle, oldDatetime, oldType) {
+
+  const newTitle = prompt("タイトル", oldTitle);
+  if (!newTitle) return;
+
+  const newDatetime = prompt("日時", oldDatetime);
+  if (!newDatetime) return;
+
+  const newType = prompt("配送方法", oldType);
+  if (!newType) return;
+
+  await updateDoc(doc(db, "events", id), {
+    title: newTitle,
+    datetime: newDatetime,
+    type: newType
+  });
+
+  loadEvents();
+}
+
+async function loadEvents() {
+  const querySnapshot = await getDocs(collection(db, "events"));
+
+  let events = [];
+
+  querySnapshot.forEach(docSnap => {
+    events.push({ id: docSnap.id, ...docSnap.data() });
+  });
+
+  render(events);
+}
+
+function render(events) {
+  const grouped = {};
+
+  events.forEach(e => {
+    const date = e.datetime.split("T")[0];
+    if (!grouped[date]) grouped[date] = [];
+    grouped[date].push(e);
+  });
+
+  const container = document.getElementById("schedule");
+  container.innerHTML = "";
+
+  Object.keys(grouped).sort().forEach(date => {
+    const div = document.createElement("div");
+    div.className = "card";
+
+    let html = `<strong>📅 ${date}</strong><br>`;
+
+　　grouped[date].forEach(e => {
+  const time = e.datetime.split("T")[1];
+
+  let color = "";
+
+  if (e.type === "ムービングチャーター") color = "purple";
+  else if (e.type === "チャーター") color = "red";
+  else if (e.type === "通常便") color = "blue";
+  else if (e.type === "宅配業者") color = "green";
+
+  html += `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+      
+     <div style="background:${color}; color:white; padding:5px 10px; border-radius:5px;">
+  ・${e.title}（${e.type} ${time}）
+</div>
+      <div>
+        <button onclick="editEvent('${e.id}', '${e.title}', '${e.datetime}', '${e.type}')">編集</button>
+        <button onclick="deleteEvent('${e.id}')">削除</button>
+      </div>
+
+    </div>
+  `;
+});
+
+    div.innerHTML = html;
+    container.appendChild(div);
+  });
+}
+
+loadEvents();
+
+</script>
+
+</body>
+</html>
